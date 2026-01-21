@@ -50,8 +50,8 @@ type Opportunity = ArbitrageOpp | EvOpp | WhaleOpp
 
 type LoggedOpp = Opportunity & {
   loggedAt: string
+  action: string
   outcome?: 'win' | 'loss' | 'pending'
-  notes?: string
 }
 
 const mockOpportunities: Opportunity[] = [
@@ -67,7 +67,7 @@ const mockOpportunities: Opportunity[] = [
     kalshiUrl: 'https://kalshi.com',
     polymarketUrl: 'https://polymarket.com',
     riskLevel: 'conservative',
-    resolvesAt: '2025-01-31',
+    resolvesAt: '2025-02-15',
   },
   {
     id: 'arb-2',
@@ -138,41 +138,33 @@ function getDurationCategory(dateStr: string): string {
   return 'long'
 }
 
+// Silent background logging
+function logToStorage(opp: Opportunity, action: string) {
+  try {
+    const saved = localStorage.getItem('prediction-alpha-log')
+    const logs: LoggedOpp[] = saved ? JSON.parse(saved) : []
+    const logged: LoggedOpp = { ...opp, loggedAt: new Date().toISOString(), action, outcome: 'pending' }
+    logs.push(logged)
+    localStorage.setItem('prediction-alpha-log', JSON.stringify(logs))
+    console.log('[Prediction Alpha] Logged:', opp.title, action)
+  } catch (e) {
+    console.error('[Prediction Alpha] Log failed:', e)
+  }
+}
+
 export default function Home() {
   const [riskProfile, setRiskProfile] = useState<'conservative' | 'balanced' | 'aggressive'>('balanced')
   const [durationFilter, setDurationFilter] = useState<'all' | 'week' | 'month' | 'quarter'>('all')
-  const [loggedOpps, setLoggedOpps] = useState<LoggedOpp[]>([])
-  const [showHistory, setShowHistory] = useState(false)
 
-  useEffect(() => {
-    const saved = localStorage.getItem('prediction-alpha-log')
-    if (saved) setLoggedOpps(JSON.parse(saved))
-  }, [])
-
-  const saveLog = (opps: LoggedOpp[]) => {
-    localStorage.setItem('prediction-alpha-log', JSON.stringify(opps))
-    setLoggedOpps(opps)
+  const handleAction = (opp: Opportunity, action: string, url: string) => {
+    logToStorage(opp, action)
+    window.open(url, '_blank')
   }
-
-  const logOpportunity = (opp: Opportunity) => {
-    const logged: LoggedOpp = { ...opp, loggedAt: new Date().toISOString(), outcome: 'pending' }
-    const updated = [...loggedOpps, logged]
-    saveLog(updated)
-  }
-
-  const updateOutcome = (id: string, outcome: 'win' | 'loss') => {
-    const updated = loggedOpps.map(o => o.id === id && o.loggedAt ? { ...o, outcome } : o)
-    saveLog(updated)
-  }
-
-  const isLogged = (id: string) => loggedOpps.some(o => o.id === id)
 
   const filteredOpportunities = mockOpportunities.filter(opp => {
-    // Risk filter
     if (riskProfile === 'conservative' && opp.riskLevel !== 'conservative') return false
     if (riskProfile === 'balanced' && opp.riskLevel === 'aggressive') return false
     
-    // Duration filter
     if (durationFilter !== 'all') {
       const cat = getDurationCategory(opp.resolvesAt)
       if (durationFilter === 'week' && cat !== 'week') return false
@@ -193,95 +185,12 @@ export default function Home() {
   const whaleCount = filteredOpportunities.filter(o => o.type === 'whale').length
   const riskEmoji = { conservative: '🟢', balanced: '🟡', aggressive: '🔴' }
 
-  const stats = {
-    total: loggedOpps.length,
-    wins: loggedOpps.filter(o => o.outcome === 'win').length,
-    losses: loggedOpps.filter(o => o.outcome === 'loss').length,
-    pending: loggedOpps.filter(o => o.outcome === 'pending').length,
-  }
-  const hitRate = stats.wins + stats.losses > 0 ? ((stats.wins / (stats.wins + stats.losses)) * 100).toFixed(0) : '-'
-
-  if (showHistory) {
-    return (
-      <main className="min-h-screen pb-20">
-        <header className="sticky top-0 z-50 bg-gray-950/90 backdrop-blur-sm border-b border-gray-800">
-          <div className="max-w-lg mx-auto px-4 py-4 flex justify-between items-center">
-            <div>
-              <h1 className="text-xl font-bold">Trade History</h1>
-              <p className="text-sm text-gray-400">Your logged opportunities</p>
-            </div>
-            <button onClick={() => setShowHistory(false)} className="text-blue-400">← Back</button>
-          </div>
-        </header>
-
-        <div className="max-w-lg mx-auto px-4 py-4">
-          <div className="grid grid-cols-4 gap-2 mb-6 text-center">
-            <div className="bg-gray-900 rounded-lg p-3">
-              <div className="text-2xl font-bold">{stats.total}</div>
-              <div className="text-xs text-gray-500">Logged</div>
-            </div>
-            <div className="bg-gray-900 rounded-lg p-3">
-              <div className="text-2xl font-bold text-green-400">{stats.wins}</div>
-              <div className="text-xs text-gray-500">Wins</div>
-            </div>
-            <div className="bg-gray-900 rounded-lg p-3">
-              <div className="text-2xl font-bold text-red-400">{stats.losses}</div>
-              <div className="text-xs text-gray-500">Losses</div>
-            </div>
-            <div className="bg-gray-900 rounded-lg p-3">
-              <div className="text-2xl font-bold text-blue-400">{hitRate}%</div>
-              <div className="text-xs text-gray-500">Hit Rate</div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {loggedOpps.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">No logged opportunities yet</div>
-            ) : (
-              loggedOpps.slice().reverse().map((opp, i) => (
-                <div key={`${opp.id}-${i}`} className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className={`px-2 py-1 rounded-full text-xs ${
-                      opp.outcome === 'win' ? 'bg-green-500/20 text-green-400' :
-                      opp.outcome === 'loss' ? 'bg-red-500/20 text-red-400' :
-                      'bg-yellow-500/20 text-yellow-400'
-                    }`}>
-                      {opp.outcome === 'pending' ? '⏳ Pending' : opp.outcome === 'win' ? '✅ Win' : '❌ Loss'}
-                    </span>
-                    <span className="text-xs text-gray-500">{new Date(opp.loggedAt).toLocaleDateString()}</span>
-                  </div>
-                  <h3 className="font-medium mb-2">{opp.title}</h3>
-                  <div className="text-sm text-gray-400 mb-3">
-                    {opp.type === 'arbitrage' && `Arbitrage +${(opp as ArbitrageOpp).profitPct.toFixed(1)}%`}
-                    {opp.type === 'ev' && `+EV ${(opp as EvOpp).edgePct.toFixed(1)}% edge`}
-                    {opp.type === 'whale' && `Whale $${((opp as WhaleOpp).amount/1000).toFixed(0)}K`}
-                  </div>
-                  {opp.outcome === 'pending' && (
-                    <div className="flex gap-2">
-                      <button onClick={() => updateOutcome(opp.id, 'win')} className="flex-1 py-2 bg-green-600 rounded-lg text-sm">✅ Won</button>
-                      <button onClick={() => updateOutcome(opp.id, 'loss')} className="flex-1 py-2 bg-red-600 rounded-lg text-sm">❌ Lost</button>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </main>
-    )
-  }
-
   return (
     <main className="min-h-screen pb-20">
       <header className="sticky top-0 z-50 bg-gray-950/90 backdrop-blur-sm border-b border-gray-800">
-        <div className="max-w-lg mx-auto px-4 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-xl font-bold">Prediction Alpha</h1>
-            <p className="text-sm text-gray-400">Kalshi + Polymarket Edge</p>
-          </div>
-          <button onClick={() => setShowHistory(true)} className="text-sm bg-gray-800 px-3 py-1 rounded-lg">
-            📊 {stats.total} logged
-          </button>
+        <div className="max-w-lg mx-auto px-4 py-4">
+          <h1 className="text-xl font-bold">Prediction Alpha</h1>
+          <p className="text-sm text-gray-400">Kalshi + Polymarket Edge</p>
         </div>
       </header>
 
@@ -359,12 +268,8 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <a href={opp.kalshiUrl} target="_blank" className="flex-1 text-center py-2 bg-blue-600 rounded-lg text-sm">Kalshi</a>
-                  <a href={opp.polymarketUrl} target="_blank" className="flex-1 text-center py-2 bg-gray-700 rounded-lg text-sm">Polymarket</a>
-                  <button onClick={() => logOpportunity(opp)} disabled={isLogged(opp.id)}
-                    className={`px-3 py-2 rounded-lg text-sm ${isLogged(opp.id) ? 'bg-gray-800 text-gray-500' : 'bg-purple-600'}`}>
-                    {isLogged(opp.id) ? '✓' : '📝'}
-                  </button>
+                  <button onClick={() => handleAction(opp, 'kalshi', opp.kalshiUrl)} className="flex-1 text-center py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm">Kalshi</button>
+                  <button onClick={() => handleAction(opp, 'polymarket', opp.polymarketUrl)} className="flex-1 text-center py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">Polymarket</button>
                 </div>
               </>
             )}
@@ -381,13 +286,7 @@ export default function Home() {
                   <span className="text-gray-400 ml-4">{opp.platform}: {(opp.price * 100).toFixed(0)}¢</span>
                 </div>
                 {opp.recommendedStake && <div className="bg-gray-800/50 rounded-lg p-2 mb-3 text-sm">Stake: <span className="text-blue-400">${opp.recommendedStake}</span></div>}
-                <div className="flex gap-2">
-                  <a href={opp.url} target="_blank" className="flex-1 text-center py-2 bg-blue-600 rounded-lg text-sm">Place on {opp.platform}</a>
-                  <button onClick={() => logOpportunity(opp)} disabled={isLogged(opp.id)}
-                    className={`px-3 py-2 rounded-lg text-sm ${isLogged(opp.id) ? 'bg-gray-800 text-gray-500' : 'bg-purple-600'}`}>
-                    {isLogged(opp.id) ? '✓' : '📝'}
-                  </button>
-                </div>
+                <button onClick={() => handleAction(opp, opp.platform.toLowerCase(), opp.url)} className="w-full text-center py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm">Place on {opp.platform}</button>
               </>
             )}
             {opp.type === 'whale' && (
@@ -405,13 +304,7 @@ export default function Home() {
                 <div className="bg-gray-800/50 rounded-lg p-2 mb-3 text-sm">
                   {opp.side} on {opp.platform}: {(opp.priceBefore * 100).toFixed(0)}¢ → {(opp.priceAfter * 100).toFixed(0)}¢
                 </div>
-                <div className="flex gap-2">
-                  <a href={opp.url} target="_blank" className="flex-1 text-center py-2 bg-gray-700 rounded-lg text-sm">View on {opp.platform}</a>
-                  <button onClick={() => logOpportunity(opp)} disabled={isLogged(opp.id)}
-                    className={`px-3 py-2 rounded-lg text-sm ${isLogged(opp.id) ? 'bg-gray-800 text-gray-500' : 'bg-purple-600'}`}>
-                    {isLogged(opp.id) ? '✓' : '📝'}
-                  </button>
-                </div>
+                <button onClick={() => handleAction(opp, opp.platform.toLowerCase(), opp.url)} className="w-full text-center py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">View on {opp.platform}</button>
               </>
             )}
           </div>
@@ -424,7 +317,7 @@ export default function Home() {
           <button className="text-gray-500 text-center"><span className="text-xl">📊</span><div className="text-xs">Arb</div></button>
           <button className="text-gray-500 text-center"><span className="text-xl">📈</span><div className="text-xs">+EV</div></button>
           <button className="text-gray-500 text-center"><span className="text-xl">🐋</span><div className="text-xs">Whales</div></button>
-          <button onClick={() => setShowHistory(true)} className="text-gray-500 text-center"><span className="text-xl">📋</span><div className="text-xs">History</div></button>
+          <button className="text-gray-500 text-center"><span className="text-xl">⚙️</span><div className="text-xs">Settings</div></button>
         </div>
       </nav>
     </main>
