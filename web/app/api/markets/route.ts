@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server'
 
 export async function GET() {
   try {
-    // Get active, non-closed markets from Gamma API
-    // Use end_date_min to filter out expired markets
     const now = new Date().toISOString()
     const marketsRes = await fetch(
       `https://gamma-api.polymarket.com/markets?closed=false&active=true&limit=50&end_date_min=${now}`
@@ -11,20 +9,17 @@ export async function GET() {
     if (!marketsRes.ok) throw new Error('Gamma API error')
     const markets = await marketsRes.json()
 
-    // Filter out any markets that are already expired (double-check)
     const nowTime = Date.now()
     const activeMarkets = markets.filter((m: any) => {
       const endDate = m.endDate || m.end_date_iso || m.endDateIso
-      if (!endDate) return true // Keep markets without end dates
+      if (!endDate) return true
       return new Date(endDate).getTime() > nowTime
     })
 
-    // Get prices from CLOB for each market's token
     const opportunities = await Promise.all(
       activeMarkets.slice(0, 25).map(async (m: any) => {
         let yesPrice = 0.5
 
-        // Try outcomePrices first (often has prices)
         if (m.outcomePrices) {
           try {
             const prices = JSON.parse(m.outcomePrices)
@@ -34,7 +29,6 @@ export async function GET() {
           } catch (e) {}
         }
 
-        // If still default, try CLOB API
         if (yesPrice === 0.5) {
           const tokenId = m.clobTokenIds?.[0] || m.conditionId
           if (tokenId) {
@@ -64,12 +58,13 @@ export async function GET() {
           volume: parseFloat(m.volume || '0'),
           liquidity: parseFloat(m.liquidity || '0'),
           endDate,
-          url: `https://polymarket.com/event/${m.slug}`,
+          url: m.conditionId
+            ? `https://polymarket.com/event/${m.conditionId}`
+            : `https://polymarket.com`,
         }
       })
     )
 
-    // Filter: must have title, valid price range, exclude 50/50 with low volume
     const valid = opportunities
       .filter((o: any) => {
         if (!o.title) return false
