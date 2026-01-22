@@ -15,6 +15,16 @@ type PolymarketOpp = {
   url: string
 }
 
+type Whale = {
+  rank: number
+  address: string
+  username: string
+  volume: number
+  pnl: number
+  profileImage: string | null
+  verified: boolean
+}
+
 type RiskProfile = 'conservative' | 'balanced' | 'aggressive'
 type Tab = 'home' | 'arb' | 'ev' | 'whales' | 'settings'
 
@@ -37,6 +47,19 @@ function formatDuration(dateStr: string): string {
   return Math.ceil(days / 365) + ' years'
 }
 
+function formatVolume(vol: number): string {
+  if (vol >= 1000000) return '$' + (vol / 1000000).toFixed(1) + 'M'
+  if (vol >= 1000) return '$' + Math.round(vol / 1000) + 'K'
+  return '$' + Math.round(vol)
+}
+
+function formatPnl(pnl: number): string {
+  const prefix = pnl >= 0 ? '+' : ''
+  if (Math.abs(pnl) >= 1000000) return prefix + '$' + (pnl / 1000000).toFixed(1) + 'M'
+  if (Math.abs(pnl) >= 1000) return prefix + '$' + Math.round(pnl / 1000) + 'K'
+  return prefix + '$' + Math.round(pnl)
+}
+
 function getRiskLevel(volume: number): RiskProfile {
   if (volume >= 1000000) return 'conservative'
   if (volume >= 100000) return 'balanced'
@@ -51,6 +74,8 @@ export default function Home() {
   const [durationFilter, setDurationFilter] = useState<string>('all')
   const [activeTab, setActiveTab] = useState<Tab>('home')
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [whales, setWhales] = useState<Whale[]>([])
+  const [whalesLoading, setWhalesLoading] = useState(false)
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
@@ -60,6 +85,12 @@ export default function Home() {
   useEffect(() => {
     fetchOpportunities()
   }, [])
+
+  useEffect(() => {
+    if (activeTab === 'whales' && whales.length === 0) {
+      fetchWhales()
+    }
+  }, [activeTab])
 
   const fetchOpportunities = async () => {
     try {
@@ -72,6 +103,21 @@ export default function Home() {
       setError(err.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchWhales = async () => {
+    try {
+      setWhalesLoading(true)
+      const res = await fetch('/api/whales')
+      const data = await res.json()
+      if (data.whales) {
+        setWhales(data.whales)
+      }
+    } catch (e) {
+      console.error('Failed to fetch whales:', e)
+    } finally {
+      setWhalesLoading(false)
     }
   }
 
@@ -148,7 +194,64 @@ export default function Home() {
       )
     }
 
-    if (activeTab === 'arb' || activeTab === 'ev' || activeTab === 'whales') {
+    if (activeTab === 'whales') {
+      return (
+        <div className="px-4 pb-24">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-xl font-bold text-white">Top Traders</h2>
+              <p className="text-gray-400 text-sm">Polymarket Leaderboard</p>
+            </div>
+            <button
+              onClick={fetchWhales}
+              className="text-xs bg-gray-800 px-3 py-1 rounded-lg hover:bg-gray-700 text-white"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {whalesLoading && whales.length === 0 ? (
+            <div className="text-center py-8 text-gray-400">Loading top traders...</div>
+          ) : (
+            <div className="space-y-3">
+              {whales.map((whale) => (
+                <div
+                  key={whale.address}
+                  className="bg-gray-800 rounded-xl p-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-lg font-bold text-white">
+                      {whale.rank}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-white truncate">{whale.username}</span>
+                        {whale.verified && (
+                          <span className="text-blue-400 text-sm">✓</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {whale.address.slice(0, 6)}...{whale.address.slice(-4)}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className={'font-semibold ' + (whale.pnl >= 0 ? 'text-green-500' : 'text-red-500')}>
+                        {formatPnl(whale.pnl)}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {formatVolume(whale.volume)} vol
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    if (activeTab === 'arb' || activeTab === 'ev') {
       return (
         <div className="px-4 pb-24 text-center py-12">
           <h2 className="text-xl font-bold text-white mb-2">Coming Soon</h2>
@@ -204,7 +307,7 @@ export default function Home() {
               <div key={opp.id} className="bg-gray-800 rounded-xl p-4 mb-4">
                 <div className="flex justify-between items-start mb-2">
                   <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded">{opp.platform}</span>
-                  <span className="text-gray-400 text-sm">${(opp.volume / 1000000).toFixed(1)}M</span>
+                  <span className="text-gray-400 text-sm">{formatVolume(opp.volume)}</span>
                 </div>
                 <h3 className="text-white font-medium mb-1">{opp.title}</h3>
                 <div className="text-gray-500 text-sm mb-3">{formatDuration(opp.endDate)}</div>
