@@ -1,9 +1,3 @@
-Web Vitals
-Get access to Ahrefs metrics with our Starter plan for just $29/month. 
-Learn more
-Get started
-
-Sign in with Ahrefs
 'use client'
 
 import { useState, useEffect } from 'react'
