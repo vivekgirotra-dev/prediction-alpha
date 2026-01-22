@@ -101,7 +101,7 @@ export default function Home() {
       <h1 className="text-2xl font-bold text-white">Prediction Alpha</h1>
       <p className="text-gray-400 text-sm">Live Polymarket Data</p>
       <div className="absolute top-6 right-4 text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded">
-        🕐 {currentTime.toLocaleTimeString()}
+        {currentTime.toLocaleTimeString()}
       </div>
     </div>
   )
@@ -110,18 +110,18 @@ export default function Home() {
     <nav className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800">
       <div className="flex justify-around py-2">
         {[
-          { id: 'home', icon: '🏠', label: 'Home' },
-          { id: 'arb', icon: '📊', label: 'Arb' },
-          { id: 'ev', icon: '📈', label: '+EV' },
-          { id: 'whales', icon: '🐋', label: 'Whales' },
-          { id: 'settings', icon: '⚙️', label: 'Settings' },
+          { id: 'home', icon: 'H', label: 'Home' },
+          { id: 'arb', icon: 'A', label: 'Arb' },
+          { id: 'ev', icon: 'E', label: '+EV' },
+          { id: 'whales', icon: 'W', label: 'Whales' },
+          { id: 'settings', icon: 'S', label: 'Settings' },
         ].map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as Tab)}
             className={`flex flex-col items-center px-3 py-1 ${activeTab === tab.id ? 'text-blue-500' : 'text-gray-500'}`}
           >
-            <span className="text-xl">{tab.icon}</span>
+            <span className="text-xl font-bold">{tab.icon}</span>
             <span className="text-xs">{tab.label}</span>
           </button>
         ))}
@@ -158,9 +158,9 @@ export default function Home() {
     if (activeTab === 'arb' || activeTab === 'ev' || activeTab === 'whales') {
       return (
         <div className="px-4 pb-24 text-center py-12">
-          <div className="text-4xl mb-4">🚧</div>
-          <h2 className="text-xl font-bold text-white mb-2">Coming Soon</h2>
-          <p className="text-gray-400">This feature is under development</p>
+          <div className="text-4xl mb-4">Coming Soon</div>
+          <h2 className="text-xl font-bold text-white mb-2">Under Development</h2>
+          <p className="text-gray-400">This feature is coming soon</p>
         </div>
       )
     }
@@ -168,8 +168,8 @@ export default function Home() {
     return (
       <div className="px-4 pb-24">
         <div className="text-center mb-4">
-          <span className="text-red-500">●</span>
-          <span className="text-gray-400 ml-1">Live Markets</span>
+          <span className="inline-block w-2 h-2 bg-red-500 rounded-full mr-1"></span>
+          <span className="text-gray-400">Live Markets</span>
           <div className="text-3xl font-bold text-green-500">{filteredOpps.length}</div>
         </div>
 
@@ -219,15 +219,15 @@ export default function Home() {
                   <span className="text-gray-400 text-sm">${(opp.volume / 1000000).toFixed(1)}M</span>
                 </div>
                 <h3 className="text-white font-medium mb-1">{opp.title}</h3>
-                <div className="text-gray-500 text-sm mb-3">⏱ {formatDuration(opp.endDate)}</div>
+                <div className="text-gray-500 text-sm mb-3">{formatDuration(opp.endDate)}</div>
                 <div className="flex gap-2 mb-3">
                   <div className="flex-1 bg-gray-700 rounded-lg p-2">
                     <div className="text-gray-400 text-xs">YES</div>
-                    <div className="text-green-500 font-bold">{Math.round(opp.yesPrice * 100)}¢</div>
+                    <div className="text-green-500 font-bold">{Math.round(opp.yesPrice * 100)}c</div>
                   </div>
                   <div className="flex-1 bg-gray-700 rounded-lg p-2">
                     <div className="text-gray-400 text-xs">NO</div>
-                    <div className="text-red-500 font-bold">{Math.round(opp.noPrice * 100)}¢</div>
+                    <div className="text-red-500 font-bold">{Math.round(opp.noPrice * 100)}c</div>
                   </div>
                 </div>
                 
