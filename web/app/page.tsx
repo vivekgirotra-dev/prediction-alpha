@@ -1,3 +1,9 @@
+Web Vitals
+Get access to Ahrefs metrics with our Starter plan for just $29/month. 
+Learn more
+Get started
+
+Sign in with Ahrefs
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -34,231 +40,166 @@ function formatDuration(dateStr: string): string {
   if (days < 30) return `${Math.ceil(days / 7)} weeks`
   if (days < 365) return `${Math.ceil(days / 30)} months`
   if (days === 999) return 'TBD'
-  return `${Math.ceil(days / 365)} years`
+  return `${(days / 365).toFixed(1)} years`
 }
 
-function getRiskLevel(volume: number): RiskProfile {
-  if (volume >= 1000000) return 'conservative'
-  if (volume >= 100000) return 'balanced'
+function formatVolume(vol: number): string {
+  if (vol >= 1000000) return `$${(vol / 1000000).toFixed(1)}M`
+  if (vol >= 1000) return `$${(vol / 1000).toFixed(0)}K`
+  return `$${vol.toFixed(0)}`
+}
+
+function getRiskLevel(opp: PolymarketOpp): RiskProfile {
+  if (opp.volume >= 1000000) return 'conservative'
+  if (opp.volume >= 100000) return 'balanced'
   return 'aggressive'
 }
 
-function meetsRiskProfile(opp: PolymarketOpp, profile: RiskProfile): boolean {
-  const level = getRiskLevel(opp.volume)
-  if (profile === 'aggressive') return true
-  if (profile === 'balanced') return level === 'conservative' || level === 'balanced'
-  if (profile === 'conservative') return level === 'conservative'
-  return true
+function logToStorage(opp: PolymarketOpp) {
+  try {
+    const logs = JSON.parse(localStorage.getItem('prediction-alpha-log') || '[]')
+    logs.push({ ...opp, loggedAt: new Date().toISOString() })
+    localStorage.setItem('prediction-alpha-log', JSON.stringify(logs))
+  } catch {}
 }
 
 export default function Home() {
   const [opportunities, setOpportunities] = useState<PolymarketOpp[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [durationFilter, setDurationFilter] = useState<'all' | 'week' | 'month' | 'quarter'>('all')
   const [riskProfile, setRiskProfile] = useState<RiskProfile>('balanced')
-  const [durationFilter, setDurationFilter] = useState<string>('all')
   const [activeTab, setActiveTab] = useState<Tab>('home')
-  const [currentTime, setCurrentTime] = useState(new Date())
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null)
 
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
-    return () => clearInterval(timer)
-  }, [])
-
-  useEffect(() => {
-    fetchOpportunities()
-  }, [])
-
-  const fetchOpportunities = async () => {
+  const fetchMarkets = async () => {
     try {
       setLoading(true)
       const res = await fetch('/api/markets')
       const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      setOpportunities(data.opportunities || [])
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+      if (data.opportunities) {
+        setOpportunities(data.opportunities)
+        setLastUpdated(new Date().toLocaleTimeString())
+        setError(null)
+      }
+    } catch { setError('Failed to fetch') }
+    finally { setLoading(false) }
   }
 
-  const filteredOpps = opportunities.filter(opp => {
-    if (!meetsRiskProfile(opp, riskProfile)) return false
-    if (durationFilter !== 'all') {
-      const days = getDaysUntil(opp.endDate)
-      if (durationFilter === '1w' && days > 7) return false
-      if (durationFilter === '1m' && days > 30) return false
-      if (durationFilter === '3m' && days > 90) return false
-    }
+  useEffect(() => {
+    fetchMarkets()
+    const i = setInterval(fetchMarkets, 60000)
+    return () => clearInterval(i)
+  }, [])
+
+  const filtered = opportunities.filter(o => {
+    const days = getDaysUntil(o.endDate)
+    if (durationFilter === 'week' && days > 7) return false
+    if (durationFilter === 'month' && days > 30) return false
+    if (durationFilter === 'quarter' && days > 90) return false
+    const risk = getRiskLevel(o)
+    if (riskProfile === 'conservative' && risk !== 'conservative') return false
+    if (riskProfile === 'balanced' && risk === 'aggressive') return false
     return true
   })
 
-  const hiddenCount = opportunities.length - filteredOpps.length
+  const hiddenCount = opportunities.length - filtered.length
 
-  const Header = () => (
-    <div className="text-center py-6">
-      <h1 className="text-2xl font-bold text-white">Prediction Alpha</h1>
-      <p className="text-gray-400 text-sm">Live Polymarket Data</p>
-      <div className="absolute top-6 right-4 text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded">
-        {currentTime.toLocaleTimeString()}
+  if (activeTab === 'settings') return (
+    <main className="min-h-screen pb-20">
+      <Header lastUpdated={lastUpdated} onRefresh={fetchMarkets} />
+      <div className="max-w-lg mx-auto px-4 py-8">
+        <h2 className="text-xl font-bold mb-4">Settings</h2>
+        <div className="bg-gray-900 rounded-xl p-4 border border-gray-800">
+          <h3 className="font-medium mb-3">Risk Profile</h3>
+          {(['conservative','balanced','aggressive'] as RiskProfile[]).map(p => (
+            <button key={p} onClick={() => setRiskProfile(p)} className={`w-full p-3 mb-2 rounded-lg text-left ${riskProfile === p ? 'bg-blue-600' : 'bg-gray-800'}`}>
+              <div className="capitalize font-medium">{p}</div>
+              <div className="text-xs opacity-70">{p === 'conservative' ? '>$1M volume' : p === 'balanced' ? '>$100K volume' : 'All markets'}</div>
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
+      <Nav activeTab={activeTab} setActiveTab={setActiveTab} />
+    </main>
   )
 
-  const Nav = () => (
-    <nav className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800">
-      <div className="flex justify-around py-2">
-        {[
-          { id: 'home', icon: 'H', label: 'Home' },
-          { id: 'arb', icon: 'A', label: 'Arb' },
-          { id: 'ev', icon: 'E', label: '+EV' },
-          { id: 'whales', icon: 'W', label: 'Whales' },
-          { id: 'settings', icon: 'S', label: 'Settings' },
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as Tab)}
-            className={`flex flex-col items-center px-3 py-1 ${activeTab === tab.id ? 'text-blue-500' : 'text-gray-500'}`}
-          >
-            <span className="text-xl font-bold">{tab.icon}</span>
-            <span className="text-xs">{tab.label}</span>
+  if (activeTab !== 'home') return (
+    <main className="min-h-screen pb-20">
+      <Header lastUpdated={lastUpdated} onRefresh={fetchMarkets} />
+      <div className="max-w-lg mx-auto px-4 py-16 text-center">
+        <div className="text-6xl mb-4">{activeTab === 'arb' ? '📊' : activeTab === 'ev' ? '📈' : '🐋'}</div>
+        <h2 className="text-xl font-bold mb-2">{activeTab === 'arb' ? 'Arbitrage' : activeTab === 'ev' ? '+EV' : 'Whales'}</h2>
+        <p className="text-gray-400 mb-4">Coming soon</p>
+        <span className="bg-purple-500/20 text-purple-400 px-4 py-2 rounded-full text-sm">🔒 Pro</span>
+      </div>
+      <Nav activeTab={activeTab} setActiveTab={setActiveTab} />
+    </main>
+  )
+
+  return (
+    <main className="min-h-screen pb-20">
+      <Header lastUpdated={lastUpdated} onRefresh={fetchMarkets} />
+      <div className="bg-gradient-to-r from-gray-900 to-gray-800 border-b border-gray-800 text-center py-4">
+        <div className="text-sm text-gray-400">🔴 Live Markets</div>
+        <div className="text-4xl font-bold text-green-400">{filtered.length}</div>
+      </div>
+      <div className="max-w-lg mx-auto px-4 py-3">
+        <div className="flex gap-2 bg-gray-900 p-1 rounded-xl">
+          {(['conservative','balanced','aggressive'] as RiskProfile[]).map(p => (
+            <button key={p} onClick={() => setRiskProfile(p)} className={`flex-1 py-2 rounded-lg text-sm capitalize ${riskProfile === p ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>{p}</button>
+          ))}
+        </div>
+      </div>
+      <div className="max-w-lg mx-auto px-4 py-2 flex gap-2">
+        {[{k:'all',l:'All'},{k:'week',l:'<1w'},{k:'month',l:'<1m'},{k:'quarter',l:'<3m'}].map(({k,l}) => (
+          <button key={k} onClick={() => setDurationFilter(k as any)} className={`flex-1 py-2 rounded-lg text-sm ${durationFilter === k ? 'bg-purple-500/20 text-purple-400 border border-purple-500' : 'bg-gray-900 border border-gray-800'}`}>{l}</button>
+        ))}
+      </div>
+      <div className="max-w-lg mx-auto px-4 py-2 space-y-3">
+        {loading && !opportunities.length ? <div className="text-center py-8 text-gray-500">Loading...</div> : error ? <div className="text-center py-8 text-red-400">{error}</div> : filtered.map(o => (
+          <div key={o.id} className="bg-gray-900 rounded-xl p-4 border border-gray-800">
+            <div className="flex justify-between mb-2">
+              <span className="px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">Polymarket</span>
+              <span className="text-xs text-gray-500">{formatVolume(o.volume)}</span>
+            </div>
+            <h3 className="font-medium mb-1">{o.title}</h3>
+            <div className="text-xs text-gray-500 mb-3">⏱️ {formatDuration(o.endDate)}</div>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="bg-gray-800/50 rounded-lg p-2"><div className="text-xs text-gray-400">YES</div><div className="text-lg font-semibold text-green-400">{(o.yesPrice*100).toFixed(0)}¢</div></div>
+              <div className="bg-gray-800/50 rounded-lg p-2"><div className="text-xs text-gray-400">NO</div><div className="text-lg font-semibold text-red-400">{(o.noPrice*100).toFixed(0)}¢</div></div>
+            </div>
+            <button onClick={() => { logToStorage(o); window.open(o.url, '_blank') }} className="w-full py-2 bg-blue-600 rounded-lg text-sm">Trade on Polymarket</button>
+          </div>
+        ))}
+        {hiddenCount > 0 && <div className="text-center py-4 text-gray-500 text-sm">{hiddenCount} hidden. <button onClick={() => setRiskProfile('aggressive')} className="text-blue-400">Show all</button></div>}
+      </div>
+      <Nav activeTab={activeTab} setActiveTab={setActiveTab} />
+    </main>
+  )
+}
+
+function Header({ lastUpdated, onRefresh }: { lastUpdated: string | null, onRefresh: () => void }) {
+  return (
+    <header className="sticky top-0 z-50 bg-gray-950/90 backdrop-blur-sm border-b border-gray-800">
+      <div className="max-w-lg mx-auto px-4 py-4 flex justify-between items-center">
+        <div><h1 className="text-xl font-bold">Prediction Alpha</h1><p className="text-sm text-gray-400">Live Polymarket Data</p></div>
+        <button onClick={onRefresh} className="text-xs bg-gray-800 px-3 py-1 rounded-lg">🔄 {lastUpdated || 'Refresh'}</button>
+      </div>
+    </header>
+  )
+}
+
+function Nav({ activeTab, setActiveTab }: { activeTab: Tab, setActiveTab: (t: Tab) => void }) {
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 bg-gray-950 border-t border-gray-800">
+      <div className="max-w-lg mx-auto px-4 py-3 flex justify-around">
+        {[{k:'home',i:'🏠',l:'Home'},{k:'arb',i:'📊',l:'Arb'},{k:'ev',i:'📈',l:'+EV'},{k:'whales',i:'🐋',l:'Whales'},{k:'settings',i:'⚙️',l:'Settings'}].map(({k,i,l}) => (
+          <button key={k} onClick={() => setActiveTab(k as Tab)} className={`flex flex-col items-center ${activeTab === k ? 'text-blue-400' : 'text-gray-500'}`}>
+            <span className="text-xl">{i}</span><span className="text-xs">{l}</span>
           </button>
         ))}
       </div>
     </nav>
-  )
-
-  const renderContent = () => {
-    if (activeTab === 'settings') {
-      return (
-        <div className="px-4 pb-24">
-          <h2 className="text-xl font-bold text-white mb-4">Settings</h2>
-          <div className="bg-gray-800 rounded-xl p-4">
-            <h3 className="text-white font-medium mb-3">Risk Profile</h3>
-            {[
-              { id: 'conservative', label: 'Conservative', desc: '>$1M volume' },
-              { id: 'balanced', label: 'Balanced', desc: '>$100K volume' },
-              { id: 'aggressive', label: 'Aggressive', desc: 'All markets' },
-            ].map(option => (
-              <button
-                key={option.id}
-                onClick={() => setRiskProfile(option.id as RiskProfile)}
-                className={`w-full text-left p-3 rounded-lg mb-2 ${riskProfile === option.id ? 'bg-blue-600' : 'bg-gray-700'}`}
-              >
-                <div className="text-white font-medium">{option.label}</div>
-                <div className="text-gray-400 text-sm">{option.desc}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )
-    }
-
-    if (activeTab === 'arb' || activeTab === 'ev' || activeTab === 'whales') {
-      return (
-        <div className="px-4 pb-24 text-center py-12">
-          <div className="text-4xl mb-4">Coming Soon</div>
-          <h2 className="text-xl font-bold text-white mb-2">Under Development</h2>
-          <p className="text-gray-400">This feature is coming soon</p>
-        </div>
-      )
-    }
-
-    return (
-      <div className="px-4 pb-24">
-        <div className="text-center mb-4">
-          <span className="inline-block w-2 h-2 bg-red-500 rounded-full mr-1"></span>
-          <span className="text-gray-400">Live Markets</span>
-          <div className="text-3xl font-bold text-green-500">{filteredOpps.length}</div>
-        </div>
-
-        <div className="flex justify-center gap-2 mb-4">
-          {(['conservative', 'balanced', 'aggressive'] as RiskProfile[]).map(profile => (
-            <button
-              key={profile}
-              onClick={() => setRiskProfile(profile)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                riskProfile === profile ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'
-              }`}
-            >
-              {profile.charAt(0).toUpperCase() + profile.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex justify-center gap-2 mb-6">
-          {[
-            { id: 'all', label: 'All' },
-            { id: '1w', label: '<1w' },
-            { id: '1m', label: '<1m' },
-            { id: '3m', label: '<3m' },
-          ].map(filter => (
-            <button
-              key={filter.id}
-              onClick={() => setDurationFilter(filter.id)}
-              className={`px-4 py-2 rounded-lg text-sm ${
-                durationFilter === filter.id ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'
-              }`}
-            >
-              {filter.label}
-            </button>
-          ))}
-        </div>
-
-        {loading ? (
-          <div className="text-center py-8 text-gray-400">Loading markets...</div>
-        ) : error ? (
-          <div className="text-center py-8 text-red-400">{error}</div>
-        ) : (
-          <>
-            {filteredOpps.map(opp => (
-              <div key={opp.id} className="bg-gray-800 rounded-xl p-4 mb-4">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded">{opp.platform}</span>
-                  <span className="text-gray-400 text-sm">${(opp.volume / 1000000).toFixed(1)}M</span>
-                </div>
-                <h3 className="text-white font-medium mb-1">{opp.title}</h3>
-                <div className="text-gray-500 text-sm mb-3">{formatDuration(opp.endDate)}</div>
-                <div className="flex gap-2 mb-3">
-                  <div className="flex-1 bg-gray-700 rounded-lg p-2">
-                    <div className="text-gray-400 text-xs">YES</div>
-                    <div className="text-green-500 font-bold">{Math.round(opp.yesPrice * 100)}c</div>
-                  </div>
-                  <div className="flex-1 bg-gray-700 rounded-lg p-2">
-                    <div className="text-gray-400 text-xs">NO</div>
-                    <div className="text-red-500 font-bold">{Math.round(opp.noPrice * 100)}c</div>
-                  </div>
-                </div>
-                
-                  href={opp.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full bg-blue-600 text-white text-center py-3 rounded-lg font-medium"
-                >
-                  Trade on Polymarket
-                </a>
-              </div>
-            ))}
-            {hiddenCount > 0 && (
-              <div className="text-center text-gray-500 py-4">
-                {hiddenCount} hidden.{' '}
-                <button onClick={() => setRiskProfile('aggressive')} className="text-blue-400">
-                  Show all
-                </button>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <main className="min-h-screen bg-gray-900 relative">
-      <Header />
-      {renderContent()}
-      <Nav />
-    </main>
   )
 }
