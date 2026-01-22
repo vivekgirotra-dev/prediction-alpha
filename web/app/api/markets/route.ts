@@ -48,6 +48,14 @@ export async function GET() {
 
         const endDate = m.endDate || m.end_date_iso || m.endDateIso || null
 
+        // Build the correct Polymarket URL using slug
+        let url = 'https://polymarket.com'
+        if (m.slug) {
+          url = `https://polymarket.com/event/${m.slug}`
+        } else if (m.marketSlug) {
+          url = `https://polymarket.com/event/${m.marketSlug}`
+        }
+
         return {
           id: m.id || m.conditionId,
           type: 'polymarket',
@@ -58,9 +66,7 @@ export async function GET() {
           volume: parseFloat(m.volume || '0'),
           liquidity: parseFloat(m.liquidity || '0'),
           endDate,
-          url: m.conditionId
-            ? `https://polymarket.com/event/${m.conditionId}`
-            : `https://polymarket.com`,
+          url,
         }
       })
     )
