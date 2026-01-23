@@ -168,9 +168,10 @@ export default function Home() {
     </nav>
   )
 
-  const renderContent = () => {
-    if (activeTab === 'settings') {
-      return (
+  if (activeTab === 'settings') {
+    return (
+      <main className="min-h-screen bg-gray-900 relative">
+        <Header />
         <div className="px-4 pb-24">
           <h2 className="text-xl font-bold text-white mb-4">Settings</h2>
           <div className="bg-gray-800 rounded-xl p-4">
@@ -191,11 +192,15 @@ export default function Home() {
             ))}
           </div>
         </div>
-      )
-    }
+        <Nav />
+      </main>
+    )
+  }
 
-    if (activeTab === 'whales') {
-      return (
+  if (activeTab === 'whales') {
+    return (
+      <main className="min-h-screen bg-gray-900 relative">
+        <Header />
         <div className="px-4 pb-24">
           <div className="flex justify-between items-center mb-4">
             <div>
@@ -209,16 +214,12 @@ export default function Home() {
               Refresh
             </button>
           </div>
-
           {whalesLoading && whales.length === 0 ? (
             <div className="text-center py-8 text-gray-400">Loading top traders...</div>
           ) : (
             <div className="space-y-3">
               {whales.map((whale) => (
-                <div
-                  key={whale.address}
-                  className="bg-gray-800 rounded-xl p-4"
-                >
+                <div key={whale.address} className="bg-gray-800 rounded-xl p-4">
                   <div className="flex items-center gap-3">
                     <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-lg font-bold text-white">
                       {whale.rank}
@@ -226,9 +227,7 @@ export default function Home() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-white truncate">{whale.username}</span>
-                        {whale.verified && (
-                          <span className="text-blue-400 text-sm">✓</span>
-                        )}
+                        {whale.verified && <span className="text-blue-400 text-sm">✓</span>}
                       </div>
                       <div className="text-xs text-gray-500 truncate">
                         {whale.address.slice(0, 6)}...{whale.address.slice(-4)}
@@ -238,9 +237,7 @@ export default function Home() {
                       <div className={'font-semibold ' + (whale.pnl >= 0 ? 'text-green-500' : 'text-red-500')}>
                         {formatPnl(whale.pnl)}
                       </div>
-                      <div className="text-xs text-gray-500">
-                        {formatVolume(whale.volume)} vol
-                      </div>
+                      <div className="text-xs text-gray-500">{formatVolume(whale.volume)} vol</div>
                     </div>
                   </div>
                 </div>
@@ -248,26 +245,33 @@ export default function Home() {
             </div>
           )}
         </div>
-      )
-    }
+        <Nav />
+      </main>
+    )
+  }
 
-    if (activeTab === 'arb' || activeTab === 'ev') {
-      return (
+  if (activeTab === 'arb' || activeTab === 'ev') {
+    return (
+      <main className="min-h-screen bg-gray-900 relative">
+        <Header />
         <div className="px-4 pb-24 text-center py-12">
           <h2 className="text-xl font-bold text-white mb-2">Coming Soon</h2>
           <p className="text-gray-400">This feature is under development</p>
         </div>
-      )
-    }
+        <Nav />
+      </main>
+    )
+  }
 
-    return (
+  return (
+    <main className="min-h-screen bg-gray-900 relative">
+      <Header />
       <div className="px-4 pb-24">
         <div className="text-center mb-4">
           <span className="text-red-500">*</span>
           <span className="text-gray-400 ml-1">Live Markets</span>
           <div className="text-3xl font-bold text-green-500">{filteredOpps.length}</div>
         </div>
-
         <div className="flex justify-center gap-2 mb-4">
           {(['conservative', 'balanced', 'aggressive'] as RiskProfile[]).map(profile => (
             <button
@@ -279,7 +283,6 @@ export default function Home() {
             </button>
           ))}
         </div>
-
         <div className="flex justify-center gap-2 mb-6">
           {[
             { id: 'all', label: 'All' },
@@ -296,7 +299,6 @@ export default function Home() {
             </button>
           ))}
         </div>
-
         {loading ? (
           <div className="text-center py-8 text-gray-400">Loading markets...</div>
         ) : error ? (
@@ -321,7 +323,7 @@ export default function Home() {
                     <div className="text-red-500 font-bold">{Math.round(opp.noPrice * 100)}c</div>
                   </div>
                 </div>
-                
+                <a
                   href={opp.url}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -342,13 +344,6 @@ export default function Home() {
           </div>
         )}
       </div>
-    )
-  }
-
-  return (
-    <main className="min-h-screen bg-gray-900 relative">
-      <Header />
-      {renderContent()}
       <Nav />
     </main>
   )
